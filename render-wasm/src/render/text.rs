@@ -200,17 +200,16 @@ fn draw_text(
     shape: &Shape,
     paragraph_builder_groups: &mut [Vec<ParagraphBuilder>],
 ) {
-    // Width
-    let paragraph_width = if let crate::shapes::Type::Text(text_content) = &shape.shape_type {
-        text_content.width()
+    let container_height = if let crate::shapes::Type::Text(text_content) = &shape.shape_type {
+        text_content.size.height
     } else {
-        shape.width()
+        shape.selrect().height()
     };
 
-    // Height
-    let container_height = shape.selrect().height();
+    let paragraph_width = shape.selrect().width();
     let total_content_height =
         calculate_all_paragraphs_height(paragraph_builder_groups, paragraph_width);
+
     let mut global_offset_y = match shape.vertical_align() {
         VerticalAlign::Center => (container_height - total_content_height) / 2.0,
         VerticalAlign::Bottom => container_height - total_content_height,
@@ -221,7 +220,6 @@ fn draw_text(
     canvas.save_layer(&layer_rec);
     for paragraph_builder_group in paragraph_builder_groups {
         let mut group_offset_y = global_offset_y;
-        let group_len = paragraph_builder_group.len();
 
         for (paragraph_index, paragraph_builder) in paragraph_builder_group.iter_mut().enumerate() {
             let mut paragraph = paragraph_builder.build();
@@ -231,25 +229,18 @@ fn draw_text(
             // a reminder in the future to keep digging why the ideographic_baseline
             // works so well and not the paragraph_height. I think we should test
             // this more.
-            let ideographic_baseline = paragraph.ideographic_baseline();
-            let xy = (shape.selrect().x(), shape.selrect().y() + group_offset_y);
+            if paragraph_index == 0 {
+                group_offset_y += paragraph.ideographic_baseline();
+            }
+            let xy = (shape.selrect().x(), shape.selrect().y() + global_offset_y);
             paragraph.paint(canvas, xy);
 
             for line_metrics in paragraph.get_line_metrics().iter() {
                 render_text_decoration(canvas, &paragraph, paragraph_builder, line_metrics, xy);
             }
-
-            #[allow(clippy::collapsible_else_if)]
-            if group_len == 1 {
-                group_offset_y += ideographic_baseline;
-            } else {
-                if paragraph_index == 0 {
-                    group_offset_y += ideographic_baseline;
-                }
-            }
         }
 
-        global_offset_y = group_offset_y;
+        global_offset_y += group_offset_y;
     }
 }
 
